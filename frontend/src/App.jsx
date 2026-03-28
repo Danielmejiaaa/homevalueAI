@@ -202,14 +202,20 @@ function App() {
             required
           />
 
-          <input
-            type="text"
+          <select
             name="location"
-            placeholder="Ubicación"
             value={formData.location}
             onChange={handleChange}
             required
-          />
+          >
+            <option value="">Selecciona una zona</option>
+            <option value="norte">Norte</option>
+            <option value="sur">Sur</option>
+            <option value="centro">Centro</option>
+            <option value="este">Este</option>
+            <option value="oeste">Oeste</option>
+          </select>
+          
 
           <button type="submit" disabled={loading}>
             {loading ? "Calculando..." : "Predecir precio"}
