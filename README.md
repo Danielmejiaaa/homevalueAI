@@ -35,28 +35,31 @@ La aplicación está compuesta por los siguientes componentes:
 ---
 
 ## Estructura del proyecto
-homevalueAI/
-│
-├── frontend/
-│ ├── src/
-│ └── Dockerfile
-│
-├── prediction-service/
-│ ├── main.py
-│ └── Dockerfile
-│
-├── history-service/
-│ ├── main.py
-│ └── Dockerfile
-│
-├── k8s/
-│ ├── frontend-deployment.yaml
-│ ├── prediction-deployment.yaml
-│ ├── history-deployment.yaml
-│ └── postgres-deployment.yaml
-│
-├── docker-compose.yml
-└── README.md
+
+- **frontend/**  
+  Aplicación React (UI)  
+  - `src/` – Código fuente  
+  - `Dockerfile` – Imagen del frontend  
+
+- **prediction-service/**  
+  Microservicio de predicción (FastAPI)  
+  - `main.py` – Lógica principal / endpoints  
+  - `Dockerfile`  
+
+- **history-service/**  
+  Microservicio de historial (FastAPI)  
+  - `main.py` – Manejo de persistencia  
+  - `Dockerfile`  
+
+- **k8s/**  
+  Manifiestos de Kubernetes  
+  - `frontend-deployment.yaml`  
+  - `prediction-deployment.yaml`  
+  - `history-deployment.yaml`  
+  - `postgres-deployment.yaml`  
+
+- `docker-compose.yml` – Orquestación local  
+- `README.md` – Documentación del proyecto
 
 
 
