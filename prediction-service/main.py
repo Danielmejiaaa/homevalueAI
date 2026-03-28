@@ -1,37 +1,228 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
+# -*- coding: utf-8 -*-
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
+import httpx
+import os
+import re
+import json
 
-app = FastAPI()
+app = FastAPI(title="HomeValue AI - Predicción con IA", version="3.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+
+
 class HouseData(BaseModel):
-    area: float
-    rooms: int
-    bathrooms: int
-    parking: int
-    age: int
-    location: str
+    area: float = Field(..., ge=10, le=1000, description="Área en metros cuadrados")
+    rooms: int = Field(..., ge=1, le=10, description="Número de habitaciones")
+    bathrooms: int = Field(..., ge=1, le=6, description="Número de baños")
+    parking: int = Field(..., ge=0, le=5, description="Número de parqueaderos")
+    age: int = Field(..., ge=0, le=100, description="Antigüedad en años")
+    location: str = Field(..., description="Ubicación: norte, sur, centro, este, oeste")
+
+
+class HousePricePredictor:
+    def __init__(self):
+        if GROQ_API_KEY:
+            print("✅ Predictor IA inicializado con Llama 3.1 via Groq")
+        else:
+            print("⚠️  No hay GROQ_API_KEY — usando fórmula de respaldo")
+
+    async def predict_with_groq(self, data: HouseData) -> dict:
+
+        prompt = f"""Eres un experto tasador inmobiliario de Cali, Colombia.
+
+PRECIOS DE REFERENCIA EN CALI 2024-2025:
+- Zona NORTE (Ciudad Jardín, Pance): $4.5M - $7M COP por m²
+- Zona CENTRO (Granada, El Peñón): $4M - $5.5M COP por m²
+- Zona OESTE (San Fernando): $3M - $4.5M COP por m²
+- Zona ESTE (Villacolombia): $2M - $3M COP por m²
+- Zona SUR (Meléndez, Siloé): $1.5M - $2.5M COP por m²
+- Cada parqueadero suma entre 15M y 25M COP
+- Cada año de antigüedad descuenta 0.8% del valor (máximo 30%)
+
+VIVIENDA A TASAR:
+- Área: {data.area} m²
+- Habitaciones: {data.rooms}
+- Baños: {data.bathrooms}
+- Parqueaderos: {data.parking}
+- Antigüedad: {data.age} años
+- Zona: {data.location.upper()}
+
+Responde SOLO con este JSON sin texto adicional:
+{{
+  "precio_estimado": <entero en COP>,
+  "precio_minimo": <entero en COP>,
+  "precio_maximo": <entero en COP>,
+  "resumen_usuario": "<Una sola oración directa para el usuario. Ejemplo: Tu vivienda de 120m² en el norte de Cali tiene un valor estimado de $540 millones COP, siendo una propiedad de alto valor por su ubicación premium y buen estado.>",
+  "factores_clave": ["<factor positivo o negativo 1>", "<factor 2>", "<factor 3>"]
+}}"""
+
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": "llama-3.1-8b-instant",
+                    "max_tokens": 500,
+                    "temperature": 0.1,
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "Eres tasador inmobiliario de Cali Colombia. Respondes SOLO con JSON válido en UTF-8. Precios siempre en COP enteros (ejemplo: 540000000)."
+                        },
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                },
+            )
+
+        if response.status_code != 200:
+            raise Exception(f"Error Groq API: {response.status_code} - {response.text}")
+
+        raw = response.json()["choices"][0]["message"]["content"]
+        content = raw.encode("utf-8").decode("utf-8").strip()
+        print(f"\n🤖 Respuesta de Llama:\n{content}\n")
+
+        json_match = re.search(r'\{.*\}', content, re.DOTALL)
+        if not json_match:
+            raise Exception("El modelo no devolvió JSON válido")
+
+        result = json.loads(json_match.group())
+        price = int(result["precio_estimado"])
+
+        if price < 80_000_000 or price > 10_000_000_000:
+            print(f"⚠️  Precio fuera de rango ({price}), usando fórmula")
+            return self.fallback_prediction(data)
+
+        price_min = int(result["precio_minimo"])
+        price_max = int(result["precio_maximo"])
+        resumen   = result.get("resumen_usuario", "")
+        factores  = result.get("factores_clave", [])
+
+        print("\n" + "="*55)
+        print("        RESULTADO PARA EL USUARIO")
+        print("="*55)
+        print(f"  {resumen}")
+        print(f"\n  Rango de mercado:")
+        print(f"    Mínimo:  ${price_min:,.0f} COP  ({round(price_min/1_000_000,1)}M)")
+        print(f"    Estimado: ${price:,.0f} COP  ({round(price/1_000_000,1)}M)")
+        print(f"    Máximo:  ${price_max:,.0f} COP  ({round(price_max/1_000_000,1)}M)")
+        print(f"\n  Factores que influyen en el precio:")
+        for f in factores:
+            print(f"    • {f}")
+        print("="*55 + "\n")
+
+        return {
+            "predicted_price": price,
+            "price_min": price_min,
+            "price_max": price_max,
+            "confidence": 0.85,
+            "model": "llama-3.1-groq-ia",
+            "summary": resumen,
+            "key_factors": factores,
+            "price_formatted": f"${price:,.0f} COP",
+            "price_millions": round(price / 1_000_000, 1),
+            "range": {
+                "min": f"${price_min:,.0f} COP",
+                "estimated": f"${price:,.0f} COP",
+                "max": f"${price_max:,.0f} COP",
+            }
+        }
+
+    def fallback_prediction(self, data: HouseData) -> dict:
+        precio_m2 = {
+            "norte":  4_500_000,
+            "centro": 4_000_000,
+            "este":   3_000_000,
+            "oeste":  2_800_000,
+            "sur":    2_500_000,
+        }
+        m2_val    = precio_m2.get(data.location.lower(), 3_000_000)
+        base      = data.area * m2_val
+        subtotal  = base + data.rooms*12_000_000 + data.bathrooms*10_000_000 + data.parking*15_000_000
+        descuento = min(data.age * 0.008, 0.30)
+        price     = max(subtotal * (1 - descuento), 80_000_000)
+        price_int = int(price)
+
+        resumen = (
+            f"Tu vivienda de {data.area}m² en la zona {data.location} de Cali "
+            f"tiene un valor estimado de ${price_int:,.0f} COP "
+            f"({round(price/1_000_000,1)} millones)."
+        )
+
+        print(f"\n  {resumen}\n")
+
+        return {
+            "predicted_price": price_int,
+            "confidence": 0.70,
+            "model": "formula_colombia",
+            "summary": resumen,
+            "price_formatted": f"${price_int:,.0f} COP",
+            "price_millions": round(price / 1_000_000, 1),
+        }
+
+    async def predict(self, data: HouseData) -> dict:
+        if GROQ_API_KEY:
+            try:
+                return await self.predict_with_groq(data)
+            except Exception as e:
+                print(f"⚠️  Error con Groq, usando fórmula: {e}")
+                return self.fallback_prediction(data)
+        return self.fallback_prediction(data)
+
+
+predictor = HousePricePredictor()
+
 
 @app.get("/")
-def read_root():
-    return {"message": "Prediction service running"}
+async def read_root():
+    return {
+        "service": "HomeValue AI",
+        "version": "3.0",
+        "status": "running",
+        "ia_activa": bool(GROQ_API_KEY),
+        "model": "llama-3.1-8b-instant (Groq)" if GROQ_API_KEY else "formula_colombia",
+    }
+
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "ia_activa": bool(GROQ_API_KEY)}
+
 
 @app.post("/predict")
-def predict(data: HouseData):
-    price = (
-        data.area * 1000 +
-        data.rooms * 50000 +
-        data.bathrooms * 30000 +
-        data.parking * 20000 -
-        data.age * 1000
-    )
+async def predict_price(data: HouseData):
+    try:
+        print(f"\n📥 Solicitud: {data.area}m² | {data.rooms}hab | {data.bathrooms}baños | {data.parking}parq | {data.age}años | {data.location}")
+        result = await predictor.predict(data)
+        return {"success": True, "data": result}
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-    return {"predicted_price": int(price)}
+
+if __name__ == "__main__":
+    print("="*55)
+    print("  HomeValue AI — Predicción con IA v3.0")
+    print("  Modelo: Llama 3.1 8B (Meta) via Groq")
+    print("="*55)
+    print(f"  IA activa: {'✅ Llama 3.1 via Groq (gratis)' if GROQ_API_KEY else '❌ Sin API key'}")
+    print(f"  Servidor:  http://localhost:5000")
+    print(f"  Docs:      http://localhost:5000/docs")
+    print("="*55)
+    uvicorn.run(app, host="0.0.0.0", port=5000)
