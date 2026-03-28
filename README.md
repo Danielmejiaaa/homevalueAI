@@ -160,7 +160,3 @@ Alternativamente puede desplegarse en **Railway** apuntando cada servicio a su s
 | `DATABASE_URL` | history-service | Cadena de conexión PostgreSQL |
 
 ---
-
-## 👥 Equipo
-
-Desarrollado como proyecto académico — Cali, Colombia, 2025.
