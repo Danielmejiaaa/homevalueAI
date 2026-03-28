@@ -1,9 +1,9 @@
-# 🏠 HomeValue AI
+# HomeValue AI
 Aplicación full-stack para estimar el precio de viviendas en Cali, Colombia, utilizando inteligencia artificial y arquitectura de microservicios.
 
 ---
 
-## 🚀 Descripción
+## Descripción
 
 HomeValue AI permite estimar el valor de mercado de una propiedad ingresando sus características:
 
@@ -18,7 +18,7 @@ El sistema usa **Llama 3.1 8B (Meta) vía Groq** como motor de IA. El modelo rec
 
 ---
 
-## 🧱 Arquitectura
+## Arquitectura
 
 ```
 homevalueAI/
@@ -63,7 +63,7 @@ CREATE TABLE prediction_history (
 
 ---
 
-## 🤖 Modelo de IA
+## Modelo de IA
 
 | Característica | Detalle |
 |---|---|
@@ -77,7 +77,7 @@ El modelo no fue entrenado específicamente con datos inmobiliarios colombianos.
 
 ---
 
-## 🐳 Ejecución local (Docker Compose)
+## Ejecución local (Docker Compose)
 
 ```bash
 docker-compose up --build
@@ -92,7 +92,7 @@ docker-compose up --build
 
 ---
 
-## 🔐 Variables de entorno
+## Variables de entorno
 
 ### Prediction Service
 ```env
@@ -103,7 +103,7 @@ GROQ_API_KEY=your_api_key_here
 
 ---
 
-## 📡 API Endpoints
+## API Endpoints
 
 ### Prediction Service
 
@@ -145,7 +145,7 @@ GROQ_API_KEY=your_api_key_here
 
 ---
 
-## ☁️ Despliegue en AWS
+## Despliegue en AWS
 
 Infraestructura definida:
 
@@ -158,7 +158,7 @@ Infraestructura definida:
 
 ---
 
-## ✅ Estado del proyecto
+## Estado del proyecto
 
 ### Completado
 - Microservicios funcionales (frontend, prediction, history)
@@ -176,7 +176,7 @@ Infraestructura definida:
 
 ---
 
-## ⚠️ Notas importantes
+## Notas importantes
 
 - La ubicación acepta únicamente: `norte`, `sur`, `centro`, `este`, `oeste`
 - La API key de Groq es requerida para activar el modelo IA
