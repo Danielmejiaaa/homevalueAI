@@ -1,6 +1,11 @@
 import "./App.css";
 import { useEffect, useState } from "react";
 
+const PREDICTION_API =
+  "http://acc22945d745a46ba95cf9b014e40a1c-498850533.us-east-1.elb.amazonaws.com:8000";
+const HISTORY_API =
+  "http://aadec859fd6a44ebca55f01931e3b2b7-701127437.us-east-1.elb.amazonaws.com:8001";
+
 function App() {
   const [formData, setFormData] = useState({
     area: "",
@@ -18,7 +23,7 @@ function App() {
 
   const fetchHistory = async () => {
     try {
-      const response = await fetch("http://localhost:8001/records");
+      const response = await fetch(`${HISTORY_API}/records`);
       if (!response.ok) {
         throw new Error("No se pudo cargar el historial.");
       }
@@ -100,7 +105,7 @@ function App() {
     };
 
     try {
-      const predictionResponse = await fetch("http://localhost:8000/predict", {
+      const predictionResponse = await fetch(`${PREDICTION_API}/predict`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -121,7 +126,7 @@ function App() {
         predicted_price: predictionData.predicted_price,
       };
 
-      const historyResponse = await fetch("http://localhost:8001/records", {
+      const historyResponse = await fetch(`${HISTORY_API}/records`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -215,7 +220,6 @@ function App() {
             <option value="este">Este</option>
             <option value="oeste">Oeste</option>
           </select>
-          
 
           <button type="submit" disabled={loading}>
             {loading ? "Calculando..." : "Predecir precio"}
