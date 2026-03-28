@@ -1,0 +1,53 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: homevalue-postgres-container
+    environment:
+      POSTGRES_DB: homevalue_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+
+  prediction-service:
+    build:
+      context: ./prediction-service
+    container_name: homevalue-prediction-container
+    environment:
+      GROQ_API_KEY: ${GROQ_API_KEY}
+    ports:
+      - "8000:8000"
+    restart: always
+
+  history-service:
+    build:
+      context: ./history-service
+    container_name: homevalue-history-container
+    environment:
+      DB_HOST: postgres
+      DB_NAME: homevalue_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres123
+      DB_PORT: 5432
+    ports:
+      - "8001:8001"
+    depends_on:
+      - postgres
+    restart: always
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: homevalue-frontend-container
+    ports:
+      - "3000:80"
+    depends_on:
+      - prediction-service
+      - history-service
+    restart: always
+
+volumes:
+  postgres_data:
