@@ -14,33 +14,52 @@ HomeValue AI permite estimar el valor de mercado de una propiedad ingresando sus
 - Antigüedad (años)
 - Ubicación (norte, sur, centro, este, oeste)
 
-El sistema utiliza **Llama 3.1 (Meta) vía Groq API** como motor de inteligencia artificial. El modelo recibe el contexto del mercado inmobiliario de Cali 2024-2025 y razona como un tasador experto para generar una estimación con rango de precios y justificación. Cada predicción queda registrada en un historial persistente.
+El sistema usa **Llama 3.1 8B (Meta) vía Groq** como motor de IA. El modelo recibe contexto del mercado inmobiliario de Cali 2024-2025 y razona como un tasador experto para generar una estimación con rango de precios y justificación. Cada predicción queda registrada en un historial persistente en PostgreSQL.
 
 ---
 
 ## 🧱 Arquitectura
 
-La aplicación está compuesta por tres microservicios independientes:
+```
+homevalueAI/
+├── frontend/           # React + Vite
+├── prediction-service/ # FastAPI — motor de IA
+├── history-service/    # FastAPI — historial
+├── docker-compose.yml
+└── README.md
+```
 
 ### 🔹 Frontend
 - Framework: React + Vite
-- Puerto local: `5173`
-- Función: interfaz de usuario para ingresar datos y visualizar resultados
+- Puerto: `3000`
 
 ### 🔹 Prediction Service
 - Framework: FastAPI (Python)
-- Puerto local: `5000`
-- Función: recibe los datos de la vivienda, consulta la IA (Llama 3.1 vía Groq) y retorna el precio estimado con justificación
-- Fallback: fórmula de valoración calibrada para el mercado colombiano si la IA no está disponible
+- Puerto: `8000`
+- Función: consulta Llama 3.1 vía Groq y retorna precio estimado con justificación
+- Fallback: fórmula de valoración calibrada para el mercado colombiano
 
 ### 🔹 History Service
 - Framework: FastAPI (Python)
-- Puerto local: `5001`
-- Función: almacena y consulta el historial de predicciones en PostgreSQL
+- Puerto: `8001`
+- Función: almacena y consulta el historial de predicciones
 
 ### 🔹 Base de Datos
 - Motor: PostgreSQL
-- Función: persistencia del historial de predicciones
+
+```sql
+CREATE TABLE prediction_history (
+    id SERIAL PRIMARY KEY,
+    area REAL NOT NULL,
+    rooms INTEGER NOT NULL,
+    bathrooms INTEGER NOT NULL,
+    parking INTEGER NOT NULL,
+    age INTEGER NOT NULL,
+    location VARCHAR(100) NOT NULL,
+    predicted_price INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
 
 ---
 
@@ -49,71 +68,46 @@ La aplicación está compuesta por tres microservicios independientes:
 | Característica | Detalle |
 |---|---|
 | Modelo | `llama-3.1-8b-instant` (Meta) |
-| Proveedor | Groq API (gratuito) |
+| Proveedor | Groq API |
 | Tipo | LLM — Large Language Model |
-| Enfoque | Razonamiento contextual con datos del mercado de Cali |
-| Fallback | Fórmula de valoración por zona (norte/sur/centro/este/oeste) |
+| Enfoque | Razonamiento contextual con precios reales de Cali |
+| Fallback | Fórmula de valoración por zona cuando la API no está disponible |
 
-El modelo no fue entrenado específicamente con datos inmobiliarios colombianos. En su lugar, se le proporciona contexto de precios reales de Cali 2024-2025 en el prompt para que razone como un tasador experto.
+El modelo no fue entrenado específicamente con datos inmobiliarios colombianos. Se le proporciona contexto de precios reales de Cali en el prompt para que razone como un tasador experto.
 
 ---
 
-## 🐳 Dockerización
-
-Cada servicio tiene su propio `Dockerfile`. El proyecto incluye `docker-compose.yml` para levantar todos los servicios juntos:
+## 🐳 Ejecución local (Docker Compose)
 
 ```bash
 docker-compose up --build
 ```
 
-Servicios definidos:
-- `homevalue-frontend`
-- `homevalue-prediction`
-- `homevalue-history`
-- `postgres`
+### Accesos:
+| Servicio | URL |
+|---|---|
+| Frontend | http://localhost:3000 |
+| Prediction API | http://localhost:8000/docs |
+| History API | http://localhost:8001/docs |
 
 ---
 
-## 🧪 Ejecución local (sin Docker)
-
-### Requisitos
-- Python 3.11+
-- Node.js 18+
-- API Key de Groq (gratuita en [console.groq.com](https://console.groq.com))
+## 🔐 Variables de entorno
 
 ### Prediction Service
-```bash
-cd prediction-service
-pip install -r requirements.txt
-$env:GROQ_API_KEY="tu_api_key"   # Windows PowerShell
-python main.py
-# Disponible en http://localhost:5000
-# Docs en http://localhost:5000/docs
+```env
+GROQ_API_KEY=your_api_key_here
 ```
 
-### History Service
-```bash
-cd history-service
-pip install -r requirements.txt
-python main.py
-# Disponible en http://localhost:5001
-```
-
-### Frontend
-```bash
-cd frontend
-npm install
-npm run dev
-# Disponible en http://localhost:5173
-```
+> Obtén tu API key gratuita en [console.groq.com](https://console.groq.com)
 
 ---
 
-## 📡 API — Prediction Service
+## 📡 API Endpoints
 
-### `POST /predict`
+### Prediction Service
 
-**Body:**
+**`POST /predict`**
 ```json
 {
   "area": 120,
@@ -142,21 +136,56 @@ npm run dev
 }
 ```
 
----
+### History Service
 
-## ☁️ Despliegue en la nube
-
-El proyecto está preparado para desplegarse en **AWS EKS (Kubernetes)**. Los manifests de Kubernetes para `Deployment`, `Service` y `LoadBalancer` están pendientes de configuración final.
-
-Alternativamente puede desplegarse en **Railway** apuntando cada servicio a su subdirectorio correspondiente.
-
----
-
-## 🔐 Variables de entorno
-
-| Variable | Servicio | Descripción |
+| Método | Endpoint | Descripción |
 |---|---|---|
-| `GROQ_API_KEY` | prediction-service | API key de Groq (gratis en console.groq.com) |
-| `DATABASE_URL` | history-service | Cadena de conexión PostgreSQL |
+| `GET` | `/records` | Lista el historial de predicciones |
+| `POST` | `/records` | Guarda una nueva predicción |
 
 ---
+
+## ☁️ Despliegue en AWS
+
+Infraestructura definida:
+
+| Servicio AWS | Uso |
+|---|---|
+| **ECR** | Almacenamiento de imágenes Docker ✅ |
+| **EKS** | Clúster Kubernetes 🔄 En progreso |
+| **IAM** | Gestión de permisos |
+| **CloudFormation** | Provisión de recursos |
+
+---
+
+## ✅ Estado del proyecto
+
+### Completado
+- Microservicios funcionales (frontend, prediction, history)
+- Integración frontend ↔ backend
+- Persistencia en PostgreSQL
+- Dockerización completa
+- Docker Compose funcionando
+- Push de imágenes a AWS ECR
+
+### En progreso
+- Despliegue en EKS
+- Configuración de Kubernetes
+- LoadBalancer público
+- CI/CD
+
+---
+
+## ⚠️ Notas importantes
+
+- La ubicación acepta únicamente: `norte`, `sur`, `centro`, `este`, `oeste`
+- La API key de Groq es requerida para activar el modelo IA
+- Sin API key el sistema usa la fórmula de valoración de respaldo
+
+---
+
+## 👤 Autor
+
+**Daniel Mejía**  
+Proyecto educativo — DevOps + IA  
+Cali, Colombia, 2025
