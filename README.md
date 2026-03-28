@@ -183,9 +183,3 @@ Infraestructura definida:
 - Sin API key el sistema usa la fórmula de valoración de respaldo
 
 ---
-
-## 👤 Autor
-
-**Daniel Mejía**  
-Proyecto educativo — DevOps + IA  
-Cali, Colombia, 2025
