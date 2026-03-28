@@ -1,185 +1,178 @@
 # HomeValue AI
-Aplicación full-stack para estimar el precio de viviendas en Cali, Colombia, utilizando inteligencia artificial y arquitectura de microservicios.
+
+Aplicación full-stack para estimar el precio de viviendas en Cali, Colombia, utilizando inteligencia artificial y una arquitectura de microservicios desplegada en AWS con Kubernetes.
 
 ---
 
 ## Descripción
 
-HomeValue AI permite estimar el valor de mercado de una propiedad ingresando sus características:
+HomeValue AI permite a los usuarios ingresar características de una vivienda (área, habitaciones, baños, etc.) y obtener una estimación de su precio mediante un modelo de predicción.
 
-- Área (m²)
-- Número de habitaciones
-- Baños
-- Parqueaderos
-- Antigüedad (años)
-- Ubicación (norte, sur, centro, este, oeste)
-
-El sistema usa **Llama 3.1 8B (Meta) vía Groq** como motor de IA. El modelo recibe contexto del mercado inmobiliario de Cali 2024-2025 y razona como un tasador experto para generar una estimación con rango de precios y justificación. Cada predicción queda registrada en un historial persistente en PostgreSQL.
+La aplicación está construida bajo una arquitectura de microservicios, donde cada componente cumple una función específica y se comunica mediante APIs REST. Además, cada predicción realizada se almacena en una base de datos para construir un historial consultable.
 
 ---
 
-## Arquitectura
+## Arquitectura del sistema
 
-```
+La aplicación está compuesta por los siguientes componentes:
+
+- Frontend (React)
+- Prediction Service (FastAPI)
+- History Service (FastAPI)
+- Base de datos PostgreSQL
+- Kubernetes (EKS)
+- Amazon ECR (registro de imágenes)
+
+### Flujo de funcionamiento
+
+1. El usuario accede al frontend.
+2. El frontend envía una solicitud al prediction-service para obtener el precio estimado.
+3. El prediction-service calcula el valor y responde.
+4. El frontend envía los datos al history-service.
+5. El history-service guarda la información en PostgreSQL.
+6. El frontend consulta el historial y lo muestra al usuario.
+
+---
+
+## Estructura del proyecto
 homevalueAI/
-├── frontend/           # React + Vite
-├── prediction-service/ # FastAPI — motor de IA
-├── history-service/    # FastAPI — historial
+│
+├── frontend/
+│ ├── src/
+│ └── Dockerfile
+│
+├── prediction-service/
+│ ├── main.py
+│ └── Dockerfile
+│
+├── history-service/
+│ ├── main.py
+│ └── Dockerfile
+│
+├── k8s/
+│ ├── frontend-deployment.yaml
+│ ├── prediction-deployment.yaml
+│ ├── history-deployment.yaml
+│ └── postgres-deployment.yaml
+│
 ├── docker-compose.yml
 └── README.md
-```
 
-### 🔹 Frontend
-- Framework: React + Vite
-- Puerto: `3000`
 
-### 🔹 Prediction Service
-- Framework: FastAPI (Python)
-- Puerto: `8000`
-- Función: consulta Llama 3.1 vía Groq y retorna precio estimado con justificación
-- Fallback: fórmula de valoración calibrada para el mercado colombiano
-
-### 🔹 History Service
-- Framework: FastAPI (Python)
-- Puerto: `8001`
-- Función: almacena y consulta el historial de predicciones
-
-### 🔹 Base de Datos
-- Motor: PostgreSQL
-
-```sql
-CREATE TABLE prediction_history (
-    id SERIAL PRIMARY KEY,
-    area REAL NOT NULL,
-    rooms INTEGER NOT NULL,
-    bathrooms INTEGER NOT NULL,
-    parking INTEGER NOT NULL,
-    age INTEGER NOT NULL,
-    location VARCHAR(100) NOT NULL,
-    predicted_price INTEGER NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
 
 ---
 
-## Modelo de IA
+## Ejecución local
 
-| Característica | Detalle |
-|---|---|
-| Modelo | `llama-3.1-8b-instant` (Meta) |
-| Proveedor | Groq API |
-| Tipo | LLM — Large Language Model |
-| Enfoque | Razonamiento contextual con precios reales de Cali |
-| Fallback | Fórmula de valoración por zona cuando la API no está disponible |
+### Requisitos
 
-El modelo no fue entrenado específicamente con datos inmobiliarios colombianos. Se le proporciona contexto de precios reales de Cali en el prompt para que razone como un tasador experto.
+- Docker
+- Docker Compose
 
----
+### Pasos
 
-## Ejecución local (Docker Compose)
+1. Clonar el repositorio:
 
 ```bash
-docker-compose up --build
+git clone https://github.com/tu-usuario/homevalueAI
+cd homevalueAI
 ```
+## Ejecutar los servicios:
+docker-compose up --build
+## Acceder a la aplicación:
+### Frontend: http://localhost:3000
+### Prediction API: http://localhost:8000
+### History API: http://localhost:8001
 
-### Accesos:
-| Servicio | URL |
-|---|---|
-| Frontend | http://localhost:3000 |
-| Prediction API | http://localhost:8000/docs |
-| History API | http://localhost:8001/docs |
-
----
+## Despliegue en AWS (EKS)
+1. Construcción de imágenes
+docker build -t homevalue-frontend ./frontend
+docker build -t homevalue-prediction ./prediction-service
+docker build -t homevalue-history ./history-service
+2. Subida a Amazon ECR
+docker tag <image> <aws_account>.dkr.ecr.us-east-1.amazonaws.com/<repo>
+docker push <aws_account>.dkr.ecr.us-east-1.amazonaws.com/<repo>
+3. Creación del clúster
+eksctl create cluster --name homevalue-cluster
+4. Despliegue en Kubernetes
+kubectl apply -f k8s/postgres-deployment.yaml
+kubectl apply -f k8s/prediction-deployment.yaml
+kubectl apply -f k8s/history-deployment.yaml
+kubectl apply -f k8s/frontend-deployment.yaml
+5. Exposición del frontend
+El frontend se expone mediante un servicio tipo LoadBalancer, lo que genera una URL pública accesible desde internet.
+## Base de datos
+Se utiliza PostgreSQL desplegado dentro del clúster.
+Tabla principal
+CREATE TABLE prediction_history (
+    id SERIAL PRIMARY KEY,
+    area REAL,
+    rooms INTEGER,
+    bathrooms INTEGER,
+    parking INTEGER,
+    age INTEGER,
+    location VARCHAR(100),
+    predicted_price INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
 ## Variables de entorno
+Ejemplo en history-service:
+env:
+  - name: DB_HOST
+    value: "postgres"
+  - name: DB_NAME
+    value: "homevalue_db"
+  - name: DB_USER
+    value: "postgres"
+  - name: DB_PASSWORD
+    value: "postgres123"
+  - name: DB_PORT
+    value: "5432"
 
-### Prediction Service
-```env
-GROQ_API_KEY=your_api_key_here
-```
+## Tecnologías utilizadas
+### Frontend
+1. React
+2. JavaScript
+3. CSS
+### Backend
+1. Python
+2. FastAPI
+### Base de datos
+1. PostgreSQL
+### Contenedores
+1. Docker
+2. Docker Compose
+### Orquestación
+1. Kubernetes (Amazon EKS)
+### Cloud
+1. AWS ECR (Elastic Container Registry)
+2. AWS EKS (Elastic Kubernetes Service)
 
-> Obtén tu API key gratuita en [console.groq.com](https://console.groq.com)
+## Funcionalidades
+1. Predicción de precios de vivienda
+2. Validación de datos en frontend
+3. Persistencia de datos en base de datos
+4. Visualización de historial
+5. Arquitectura de microservicios
+6. Despliegue en Kubernetes
 
----
+## Resultados
+La aplicación permite:
+1. Acceder desde internet mediante LoadBalancer
+2. Realizar predicciones en tiempo real
+3. Guardar y consultar historial persistente
+4. Ejecutar todos los servicios dentro de Kubernetes
 
-## API Endpoints
+## Consideraciones
+1. Los servicios backend se comunican mediante servicios internos de Kubernetes
+2. La base de datos se encuentra dentro del clúster
+3. Las imágenes se almacenan en Amazon ECR
+4. El frontend consume APIs públicas desplegadas en AWS
 
-### Prediction Service
-
-**`POST /predict`**
-```json
-{
-  "area": 120,
-  "rooms": 3,
-  "bathrooms": 2,
-  "parking": 1,
-  "age": 5,
-  "location": "norte"
-}
-```
-
-**Respuesta:**
-```json
-{
-  "success": true,
-  "data": {
-    "predicted_price": 540000000,
-    "price_min": 480000000,
-    "price_max": 600000000,
-    "price_formatted": "$540,000,000 COP",
-    "price_millions": 540.0,
-    "model": "llama-3.1-groq-ia",
-    "summary": "Tu vivienda de 120m² en el norte de Cali tiene un valor estimado de $540 millones COP.",
-    "key_factors": ["ubicación premium zona norte", "buen estado de conservación", "parqueadero incluido"]
-  }
-}
-```
-
-### History Service
-
-| Método | Endpoint | Descripción |
-|---|---|---|
-| `GET` | `/records` | Lista el historial de predicciones |
-| `POST` | `/records` | Guarda una nueva predicción |
-
----
-
-## Despliegue en AWS
-
-Infraestructura definida:
-
-| Servicio AWS | Uso |
-|---|---|
-| **ECR** | Almacenamiento de imágenes Docker ✅ |
-| **EKS** | Clúster Kubernetes 🔄 En progreso |
-| **IAM** | Gestión de permisos |
-| **CloudFormation** | Provisión de recursos |
-
----
-
-## Estado del proyecto
-
-### Completado
-- Microservicios funcionales (frontend, prediction, history)
-- Integración frontend ↔ backend
-- Persistencia en PostgreSQL
-- Dockerización completa
-- Docker Compose funcionando
-- Push de imágenes a AWS ECR
-
-### En progreso
-- Despliegue en EKS
-- Configuración de Kubernetes
-- LoadBalancer público
-- CI/CD
-
----
-
-## Notas importantes
-
-- La ubicación acepta únicamente: `norte`, `sur`, `centro`, `este`, `oeste`
-- La API key de Groq es requerida para activar el modelo IA
-- Sin API key el sistema usa la fórmula de valoración de respaldo
-
----
+## Posibles mejoras
+1. Uso de Kubernetes Secrets para credenciales
+2. Implementación de Ingress Controller
+3. Uso de dominio personalizado
+4. Autenticación de usuarios
+5. Escalamiento automático (HPA)
