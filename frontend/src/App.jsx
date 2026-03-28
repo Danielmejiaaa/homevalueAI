@@ -41,11 +41,54 @@ function App() {
     }));
   };
 
+  const validateForm = () => {
+    const area = Number(formData.area);
+    const rooms = Number(formData.rooms);
+    const bathrooms = Number(formData.bathrooms);
+    const parking = Number(formData.parking);
+    const age = Number(formData.age);
+    const location = formData.location.trim();
+
+    if (!formData.area || area <= 0) {
+      return "El área debe ser mayor que 0.";
+    }
+
+    if (!formData.rooms || rooms <= 0) {
+      return "El número de habitaciones debe ser mayor que 0.";
+    }
+
+    if (!formData.bathrooms || bathrooms < 1) {
+      return "El número de baños debe ser al menos 1.";
+    }
+
+    if (formData.parking === "" || parking < 0) {
+      return "El número de parqueaderos no puede ser negativo.";
+    }
+
+    if (formData.age === "" || age < 0) {
+      return "La antigüedad no puede ser negativa.";
+    }
+
+    if (!location) {
+      return "La ubicación no puede estar vacía.";
+    }
+
+    return null;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
     setPrediction(null);
+
+    const validationError = validateForm();
+
+    if (validationError) {
+      setError(validationError);
+      setLoading(false);
+      return;
+    }
 
     const payload = {
       area: Number(formData.area),
@@ -53,7 +96,7 @@ function App() {
       bathrooms: Number(formData.bathrooms),
       parking: Number(formData.parking),
       age: Number(formData.age),
-      location: formData.location,
+      location: formData.location.trim(),
     };
 
     try {
@@ -66,7 +109,8 @@ function App() {
       });
 
       if (!predictionResponse.ok) {
-        throw new Error("No se pudo obtener la predicción.");
+        const errorData = await predictionResponse.json();
+        throw new Error(errorData.detail || "No se pudo obtener la predicción.");
       }
 
       const predictionData = await predictionResponse.json();
@@ -86,12 +130,13 @@ function App() {
       });
 
       if (!historyResponse.ok) {
-        throw new Error("No se pudo guardar en el historial.");
+        const errorData = await historyResponse.json();
+        throw new Error(errorData.detail || "No se pudo guardar en el historial.");
       }
 
       fetchHistory();
     } catch (err) {
-      setError("Error al conectar con los servicios.");
+      setError(err.message || "Error al conectar con los servicios.");
       console.error(err);
     } finally {
       setLoading(false);
@@ -113,6 +158,7 @@ function App() {
             placeholder="Área (m²)"
             value={formData.area}
             onChange={handleChange}
+            min="1"
             required
           />
 
@@ -122,6 +168,7 @@ function App() {
             placeholder="Habitaciones"
             value={formData.rooms}
             onChange={handleChange}
+            min="1"
             required
           />
 
@@ -131,6 +178,7 @@ function App() {
             placeholder="Baños"
             value={formData.bathrooms}
             onChange={handleChange}
+            min="1"
             required
           />
 
@@ -140,6 +188,7 @@ function App() {
             placeholder="Parqueaderos"
             value={formData.parking}
             onChange={handleChange}
+            min="0"
             required
           />
 
@@ -149,6 +198,7 @@ function App() {
             placeholder="Antigüedad (años)"
             value={formData.age}
             onChange={handleChange}
+            min="0"
             required
           />
 
